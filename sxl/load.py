@@ -1,6 +1,7 @@
 import pandas as pd
 import scipy.io as sio
 import numpy as np
+import re
 
 
 def load_all_mouses(mouse_data, event1_length=3299, event234_length=5749):
@@ -25,8 +26,14 @@ def load_all_mouses(mouse_data, event1_length=3299, event234_length=5749):
                 events[event1_length + event234_length :] = True
             else:
                 events[event1_length : event1_length + event234_length] = True
+
+            assert behavior_data.columns[0].lower().startswith(
+                "start"
+            ) and behavior_data.columns[1].lower().startswith(
+                "end"
+            ), "the first two columns of behavior file must be start and end, and named S(s)tart# and E(e)nd#, where # = 1, 2, 3, 4, 5"
             labels = np.full(n_frames, False)
-            for start, end in zip(behavior_data["Start5"], behavior_data["End5"]):
+            for start, end in zip(behavior_data.iloc[:, 0], behavior_data.iloc[:, 1]):
                 if np.isnan(start) or np.isnan(end):
                     print(
                         f"Warning: NaN value encountered in event. Skipping this event."
@@ -39,8 +46,11 @@ def load_all_mouses(mouse_data, event1_length=3299, event234_length=5749):
                 if end > n_frames:
                     end = n_frames
                 labels[start:end] = True
-            event_name = "event" + behavior_data.columns[0].lower()[-1]
-            label_name = "label" + behavior_data.columns[0].lower()[-1]
+            event_tail_num = re.search(
+                r"start(\d+)", behavior_data.columns[0], re.IGNORECASE
+            ).group(1)
+            event_name = "event" + event_tail_num
+            label_name = "label" + event_tail_num
             df[event_name] = events
             df[label_name] = labels
             names += [event_name, label_name]

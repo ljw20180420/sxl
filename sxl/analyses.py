@@ -63,8 +63,8 @@ def calculate_auroc_etc(dfg, event, permute_num=1000):
     quantile = sum(np.array(random_permute_aurocs) < auroc) / len(random_permute_aurocs)
 
     return pd.Series(
-        (auroc, fpr, tpr, quantile),
-        index=["auroc", "fpr", "tpr", "quantile"],
+        (f"event{event}", auroc, fpr, tpr, quantile),
+        index=["event", "auroc", "fpr", "tpr", "quantile"],
     )
 
 
