@@ -12,21 +12,16 @@ def load_all_mouses(mouse_data, event1_length=3299, event234_length=5749):
         neuron_data = sio.loadmat(z_score_file)["df_f_zscore"]
         n_cells, n_frames = neuron_data.shape
         cell_names = [f"cell{idx_cell}" for idx_cell in range(n_cells)]
-        df = pd.DataFrame(neuron_data.T, columns=cell_names)
-        df.insert(0, "mouse", mouse_name)
-        df["time"] = df.index
-        names = ["mouse", "time"]
+        time_indices = {
+            "mouse": [mouse_name] * n_frames,
+            "time": range(n_frames),
+            "event": ["event1"] * event1_length
+            + ["event234"] * event234_length
+            + ["event5"] * (n_frames - event1_length - event234_length),
+        }
         for behavior_file in behavior_files:
             # 读取行为事件数据
             behavior_data = pd.read_excel(behavior_file)
-            events = np.full(n_frames, False)
-            if behavior_data.columns[0].lower() == "start1":
-                events[:event1_length] = True
-            elif behavior_data.columns[0].lower() == "start5":
-                events[event1_length + event234_length :] = True
-            else:
-                events[event1_length : event1_length + event234_length] = True
-
             assert behavior_data.columns[0].lower().startswith(
                 "start"
             ) and behavior_data.columns[1].lower().startswith(
@@ -49,21 +44,25 @@ def load_all_mouses(mouse_data, event1_length=3299, event234_length=5749):
             event_tail_num = re.search(
                 r"start(\d+)", behavior_data.columns[0], re.IGNORECASE
             ).group(1)
-            event_name = "event" + event_tail_num
-            label_name = "label" + event_tail_num
-            df[event_name] = events
-            df[label_name] = labels
-            names += [event_name, label_name]
+            time_indices["label" + event_tail_num] = labels
 
+        multi_index = pd.DataFrame(time_indices)
+        multi_index["event"] = multi_index["event"].astype("category")
+        df = pd.DataFrame(
+            data=neuron_data.T,
+            index=pd.MultiIndex.from_frame(multi_index),
+            columns=cell_names,
+        )
         df = pd.melt(
             df,
-            id_vars=names,
             value_vars=cell_names,
             var_name="cell",
             value_name="signal",
+            ignore_index=False,
         )
-        df.insert(1, "cell", df.pop("cell"))
+        df["cell"] = pd.Categorical(df["cell"])
+        df = df.set_index("cell", append=True).sort_index()
 
         dfs.append(df)
 
-    return pd.concat(dfs).reset_index(drop=True)
+    return pd.concat(dfs)

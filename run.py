@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import pandas as pd
 from sxl.load import load_all_mouses
 from sxl.analyses import (
     pearson_correlation_coefficient,
@@ -20,25 +21,25 @@ if __name__ == "__main__":
                     "for_LJW/F2_2/behavior5.xlsx",
                 ],
             ),
-            # "F2_3": (
-            #     "for_LJW/F2_3/df_f_zscore.npy.mat",
-            #     [
-            #         "for_LJW/F2_3/behavior1.xlsx",
-            #         "for_LJW/F2_3/behavior2.xlsx",
-            #         "for_LJW/F2_3/behavior3.xlsx",
-            #         "for_LJW/F2_3/behavior4.xlsx",
-            #         "for_LJW/F2_3/behavior5.xlsx",
-            #     ],
-            # ),
+            "F2_3": (
+                "for_LJW/F2_3/df_f_zscore.npy.mat",
+                [
+                    "for_LJW/F2_3/behavior1.xlsx",
+                    "for_LJW/F2_3/behavior2.xlsx",
+                    "for_LJW/F2_3/behavior3.xlsx",
+                    "for_LJW/F2_3/behavior4.xlsx",
+                    "for_LJW/F2_3/behavior5.xlsx",
+                ],
+            ),
         },
         event1_length=6299,
         event234_length=5749,
     )
 
-    df.to_csv("for_LJW/data.csv", index=False)
+    df.to_csv("for_LJW/data.csv")
 
     df_corr_events = pearson_correlation_coefficient(df, events=[1, 2, 3, 4, 5])
-    df_corr_events.to_csv("for_LJW/corr.csv", index=False)
+    df_corr_events.to_csv("for_LJW/corr.csv")
 
     df_auroc = evaluate_neurons_with_roc(df, events=[1, 2, 3, 4, 5], permute_num=1000)
     df_auroc["type"] = df_auroc["quantile"].transform(
@@ -50,30 +51,28 @@ if __name__ == "__main__":
         axis=0,
     )
 
-    df_auroc.loc[:, ["mouse", "cell", "event", "auroc", "quantile", "type"]].to_csv(
-        "for_LJW/auroc_analysis.csv", index=False
-    )
+    df_auroc.loc[:, ["auroc", "quantile", "type"]].to_csv("for_LJW/auroc_analysis.csv")
 
-    df_auroc.groupby(["mouse", "event"])["type"].value_counts().reset_index(
-        drop=False
-    ).to_csv("for_LJW/auroc_analysis_count.csv", index=False)
+    df_auroc.groupby(["mouse", "label"])["type"].value_counts().to_csv(
+        "for_LJW/auroc_analysis_count.csv"
+    )
 
     fig = plot_roc_curves_for_events(df_auroc)
     fig.savefig("for_LJW/auroc_analysis.pdf")
 
     df_auroc_pivot = (
-        df_auroc.loc[:, ["mouse", "cell", "event", "type"]]
-        .pivot(columns="event", index=["mouse", "cell"], values="type")
-        .reset_index(drop=False)
+        df_auroc.loc[:, ["type"]]
+        .reset_index(level="label")
+        .pivot(columns="label", values="type")
     )
 
-    for event in ["event2", "event3", "event4"]:
-        df_auroc_pivot[event] = (
-            df_auroc_pivot[event]
+    for label in ["label2", "label3", "label4"]:
+        df_auroc_pivot[label] = (
+            df_auroc_pivot[label]
             .str.replace("excited", "response")
             .replace("inhibited", "response")
         )
 
-    df_auroc_pivot.loc[:, ["event2", "event3", "event4"]].value_counts().reset_index(
-        drop=False
-    ).to_csv("for_LJW/venn.csv", index=False)
+    df_auroc_pivot.loc[:, ["label2", "label3", "label4"]].value_counts().to_csv(
+        "for_LJW/venn.csv"
+    )

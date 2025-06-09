@@ -10,37 +10,43 @@ def pearson_correlation_coefficient(
     df: pd.DataFrame, events: list = [1, 2, 3, 4, 5]
 ) -> pd.DataFrame:
     df_mean_signal = (
-        df.groupby(["mouse", "time"])
+        df.reset_index(level=["event"] + [f"label{event}" for event in events])
+        .groupby(["mouse", "time"])
         .agg(
             {
-                **{f"event{event}": "first" for event in events},
+                "event": "first",
                 **{f"label{event}": "first" for event in events},
                 "signal": "mean",
             }
         )
-        .reset_index(drop=False)
     )
 
-    return pd.concat(
-        [
-            df_mean_signal.query(f"event{event}")
+    dfs = []
+    for event in events:
+        if event == 1:
+            ev_filter = "event1"
+        elif event == 5:
+            ev_filter = "event5"
+        else:
+            ev_filter = "event234"
+        dfs.append(
+            df_mean_signal.query("event == @ev_filter")
             .groupby("mouse")
             .apply(
                 lambda dfg: pd.Series(
                     (
+                        f"label{event}",
                         dfg[f"label{event}"].corr(dfg["signal"]),
                         dfg[f"label{event}"]
                         .reset_index(drop=True)
                         .corr(pd.Series(np.random.permutation(dfg["signal"]))),
-                        f"event{event}",
                     ),
-                    index=["corr", "shuffle", "event"],
+                    index=["label", "corr", "shuffle"],
                 )
             )
-            .reset_index(drop=False)
-            for event in events
-        ]
-    ).reset_index(drop=True)
+        )
+
+    return pd.concat(dfs).set_index("label", append=True).sort_index()
 
 
 def do_random_permute_auroc(i, labels, signals):
@@ -62,9 +68,17 @@ def calculate_auroc_etc(dfg, event, permute_num=1000):
         )
     quantile = sum(np.array(random_permute_aurocs) < auroc) / len(random_permute_aurocs)
 
+    print(
+        {
+            "event": event,
+            "mouse": dfg.index.get_level_values("mouse")[0],
+            "cell": dfg.index.get_level_values("cell")[0],
+        }
+    )
+
     return pd.Series(
-        (f"event{event}", auroc, fpr, tpr, quantile),
-        index=["event", "auroc", "fpr", "tpr", "quantile"],
+        (f"label{event}", auroc, fpr, tpr, quantile),
+        index=["label", "auroc", "fpr", "tpr", "quantile"],
     )
 
 
@@ -72,15 +86,22 @@ def calculate_auroc_etc(dfg, event, permute_num=1000):
 def evaluate_neurons_with_roc(
     df: pd.DataFrame, events: list = [1, 2, 3, 4, 5], permute_num=1000
 ):
-    return pd.concat(
-        [
-            df.query(f"event{event}")
+    dfs = []
+    for event in events:
+        if event == 1:
+            ev_filter = "event1"
+        elif event == 5:
+            ev_filter = "event5"
+        else:
+            ev_filter = "event234"
+        dfs.append(
+            df.reset_index(level=[f"label{event}" for event in events])
+            .query("event == @ev_filter")
             .groupby(["mouse", "cell"])
             .apply(calculate_auroc_etc, event=event, permute_num=permute_num)
-            .reset_index(drop=False)
-            for event in events
-        ]
-    ).reset_index(drop=True)
+        )
+
+    return pd.concat(dfs).set_index("label", append=True).sort_index()
 
 
 # 绘制ROC曲线（只针对事件1）
@@ -95,9 +116,9 @@ def plot_roc_curves_for_events(df: pd.DataFrame):
         ["orchid", "red", "gainsboro"],
         ["excited", "inhibited", "Non-responsive"],
     ):
-        fpr = df.loc[idx, "fpr"]
-        tpr = df.loc[idx, "tpr"]
-        auroc = df.loc[idx, "auroc"]
+        fpr = df.iloc[idx]["fpr"]
+        tpr = df.iloc[idx]["tpr"]
+        auroc = df.iloc[idx]["auroc"]
 
         ax.plot(fpr, tpr, color=color, lw=2, label=f"{label} (auROC = {auroc:.2f})")
 
