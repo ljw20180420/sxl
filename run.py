@@ -35,7 +35,7 @@ if __name__ == "__main__":
         event1_length=6299,
         event234_length=5749,
     )
-
+    breakpoint()
     df.to_csv("for_LJW/data.csv")
 
     df_corr_events = pearson_correlation_coefficient(df, events=[1, 2, 3, 4, 5])

@@ -4,44 +4,41 @@ library(ggalluvial)
 
 event_from <- "label1"
 event_to <- "label5"
-# mouses <- c("F2_2", "F2_3")
-# mouses <- c("F2_2")
 
 tb <- read_csv("for_LJW/auroc_analysis.csv") |>
-    # filter(mouse %in% mouses) |>
     pivot_wider(
         id_cols = c("mouse", "cell"),
         names_from = "label",
         values_from = "type",
-    )
-
-from_count <- tb  |>
-    summarise(count = n(), .by = c(event_from))
+    ) |>
+    select(mouse, cell, {{event_from}}, {{event_to}})
 
 from_to_count <- tb |>
     summarise(count = n(), .by = c(event_from, event_to))
 
 tb <- tb |>
-    left_join(from_count, by=c(event_from)) |>
-    mutate(from = sprintf("%s: %d", event_from, count)) |>
-    select(!count)
+    left_join(from_to_count, by=c(event_from, event_to))
 
-tb <- tb |>
-    left_join(from_to_count, by=c(event_from, event_to)) |>
-    mutate(from_to = sprintf("%s_%s: %d", event_from, event_to, count)) |>
-    select(!count)
+tb["cross"] <- paste(
+    paste(
+        tb[[event_from]],
+        tb[[event_to]],
+        sep="_"
+    ),
+    tb[["count"]],
+    sep=": "
+)
 
+tb <- tb |> select(!count)
 
 ggfig <- tb |>
     ggplot(
-        aes(axis1 = from, axis2 = from_to)
+        aes(axis1 = !!sym(event_from), axis2 = !!sym(event_to), fill=cross)
     ) +
-    scale_x_discrete(limits = c(event_from, event_to)) +
-    xlab("transit") +
-    ylab("count") +
-    geom_alluvium(aes(fill = from)) +
+    geom_alluvium() +
     geom_stratum() +
-    geom_text(stat = "stratum", aes(label = after_stat(stratum))) +
+    stat_flow(geom="text", aes(label = cross)) +
+    scale_x_discrete(limits = c(event_from, event_to))
     theme_minimal() +
     ggtitle("cell type transition")
 
